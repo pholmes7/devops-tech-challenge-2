@@ -250,3 +250,351 @@ Core EKS system workloads can be verified with:
 ```bash
 kubectl get pods -n kube-system
 ```
+
+## Kubernetes Application Deployment
+
+The containerized Flask application is deployed to Amazon EKS using Kubernetes. The Docker image is stored in Amazon Elastic Container Registry (ECR), allowing the EKS worker nodes to securely pull and run the application.
+
+The initial Kubernetes deployment runs one application pod on the EKS managed node group. Kubernetes manages the application's desired state and automatically replaces the pod if it fails or is deleted.
+
+### Kubernetes Architecture
+
+The application currently follows this deployment flow:
+
+```text
+Local Flask Application
+        ↓
+Docker Image
+        ↓
+Amazon ECR
+        ↓
+Amazon EKS
+        ↓
+EKS Worker Node
+        ↓
+Kubernetes Deployment
+        ↓
+Flask Pod
+        ↓
+Kubernetes ClusterIP Service
+```
+
+Public access through an Application Load Balancer (ALB) will be configured in a later phase.
+
+### Kubernetes Resources
+
+The Kubernetes configuration is stored in:
+
+```text
+kubernetes/
+├── deployment.yaml
+└── service.yaml
+```
+
+The resources include:
+
+- `deployment.yaml` - Defines and manages the Flask application pod.
+- `service.yaml` - Creates a stable internal endpoint and routes traffic to the application pod.
+
+### Application Deployment Configuration
+
+The Kubernetes Deployment initially runs one replica of the Flask application.
+
+The container uses the Docker image stored in Amazon ECR and listens on port `5000`.
+
+Resource requests and limits are configured for the container:
+
+```yaml
+resources:
+  requests:
+    cpu: "25m"
+    memory: "64Mi"
+  limits:
+    cpu: "250m"
+    memory: "256Mi"
+```
+
+The CPU and memory requests establish the resource baseline for the pod and will later be used by the Horizontal Pod Autoscaler (HPA) when calculating CPU and memory utilization.
+
+The Deployment also includes Kubernetes readiness and liveness probes against the application's `/` endpoint.
+
+The readiness probe verifies that the application is ready to receive traffic, while the liveness probe allows Kubernetes to detect and restart an unhealthy container.
+
+### Kubernetes Service
+
+The application uses a `ClusterIP` Service:
+
+```yaml
+type: ClusterIP
+```
+
+The Service listens on port `80` and forwards traffic to the Flask application on port `5000`:
+
+```text
+Kubernetes Service :80
+        ↓
+Flask Pod :5000
+```
+
+The Service uses the application label to automatically locate the appropriate application pods:
+
+```yaml
+selector:
+  app: tech-challenge-2-app
+```
+
+This provides a stable endpoint even when application pods are created, deleted, or replaced.
+
+### Authenticate Docker to Amazon ECR
+
+Before pushing an image, authenticate Docker with the Amazon ECR registry.
+
+The standard AWS ECR authentication command is:
+
+```bash
+aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin <aws-account-id>.dkr.ecr.us-east-2.amazonaws.com
+```
+
+> **Windows PowerShell Note:** During development, PowerShell produced an HTTP 400 error when piping the ECR authentication token directly to Docker. Running the pipeline through `cmd.exe` resolved the issue:
+
+```powershell
+cmd.exe /c "aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin <aws-account-id>.dkr.ecr.us-east-2.amazonaws.com"
+```
+
+### Build and Push the Docker Image to ECR
+
+Retrieve the ECR repository URL from Terraform:
+
+```powershell
+$ECR_REPO = terraform -chdir=terraform output -raw ecr_repository_url
+```
+
+Build the application image if needed:
+
+```powershell
+docker build -t tech-challenge-2-app ./app
+```
+
+Tag the local Docker image with the ECR repository:
+
+```powershell
+docker tag tech-challenge-2-app:latest ${ECR_REPO}:latest
+```
+
+Push the image to Amazon ECR:
+
+```powershell
+docker push ${ECR_REPO}:latest
+```
+
+Verify that the image exists in ECR:
+
+```powershell
+aws ecr describe-images --repository-name devops-tech-challenge-2-app --region us-east-2
+```
+
+### Configure kubectl for EKS
+
+Configure the local Kubernetes configuration to communicate with the EKS cluster:
+
+```powershell
+aws eks update-kubeconfig --region us-east-2 --name tech-challenge-2-eks
+```
+
+Verify the active Kubernetes context:
+
+```powershell
+kubectl config current-context
+```
+
+Verify connectivity to the cluster:
+
+```powershell
+kubectl cluster-info
+```
+
+Verify that the EKS worker node is available:
+
+```powershell
+kubectl get nodes
+```
+
+The worker node should report a status of:
+
+```text
+Ready
+```
+
+### Validate the Kubernetes Configuration
+
+Before deploying, the Kubernetes YAML files can be validated using a client-side dry run:
+
+```powershell
+kubectl apply --dry-run=client -f kubernetes\
+```
+
+The dry run validates the configuration without creating resources in the EKS cluster.
+
+### Deploy the Application to EKS
+
+Deploy the Kubernetes resources:
+
+```powershell
+kubectl apply -f kubernetes\
+```
+
+Verify the Deployment:
+
+```powershell
+kubectl get deployments
+```
+
+Verify the application pod:
+
+```powershell
+kubectl get pods
+```
+
+Verify the Service:
+
+```powershell
+kubectl get services
+```
+
+Verify that the Service has discovered the application pod:
+
+```powershell
+kubectl get endpoints tech-challenge-2-service
+```
+
+The initial application state should contain:
+
+```text
+EKS Worker Nodes:     1
+Application Replicas: 1
+Application Pods:     1
+```
+
+The application pod should report:
+
+```text
+READY:   1/1
+STATUS:  Running
+```
+
+### Inspect the Application
+
+View detailed information about the application pod:
+
+```powershell
+kubectl describe pod <pod-name>
+```
+
+View application logs:
+
+```powershell
+kubectl logs -l app=tech-challenge-2-app
+```
+
+The Flask application should report that it is listening on port `5000`.
+
+### Test the Application
+
+Because the application currently uses an internal `ClusterIP` Service, it can be tested locally using Kubernetes port forwarding.
+
+Run:
+
+```powershell
+kubectl port-forward service/tech-challenge-2-service 8080:80
+```
+
+Then access:
+
+```text
+http://localhost:8080
+```
+
+The application should display:
+
+```text
+Hello, World!
+```
+
+The application can also be tested from another terminal:
+
+```powershell
+curl.exe http://localhost:8080
+```
+
+Expected response:
+
+```text
+Hello, World!
+```
+
+Stop the temporary port-forward with `Ctrl + C`.
+
+### Kubernetes Self-Healing Test
+
+Kubernetes self-healing was validated by manually deleting the running application pod.
+
+First, identify the pod:
+
+```powershell
+kubectl get pods
+```
+
+Monitor the application pods:
+
+```powershell
+kubectl get pods -w
+```
+
+In another terminal, delete the running pod:
+
+```powershell
+kubectl delete pod <pod-name>
+```
+
+Because the Deployment specifies a desired state of one replica, Kubernetes automatically creates a replacement pod.
+
+The expected behavior is:
+
+```text
+1 Running Pod
+      ↓
+Pod Deleted
+      ↓
+0 Running Pods
+      ↓
+Kubernetes Detects Desired-State Mismatch
+      ↓
+Replacement Pod Created
+      ↓
+1 Running Pod
+```
+
+Verify that the replacement pod reaches:
+
+```text
+READY:   1/1
+STATUS:  Running
+```
+
+This validates Kubernetes' ability to maintain the application's desired state without manual intervention.
+
+### Current Kubernetes Status
+
+At the completion of this phase:
+
+- The Flask application is containerized with Docker.
+- The Docker image is stored in Amazon ECR.
+- Amazon EKS is running with one `t3.small` worker node.
+- The EKS managed node group can scale from 1 to 4 nodes.
+- The application Deployment starts with one replica.
+- CPU and memory resource requests and limits are configured.
+- Readiness and liveness probes monitor application health.
+- A ClusterIP Service routes traffic to the application pod.
+- The application successfully returns `Hello, World!` through the Kubernetes Service.
+- Kubernetes self-healing successfully replaces a deleted application pod.
+- Public ALB access, Helm deployment, and autoscaling will be configured in later phases.
