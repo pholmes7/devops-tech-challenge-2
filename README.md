@@ -113,3 +113,140 @@ Restart the existing container:
 ```bash
 docker start tech-challenge-2-container
 ```
+---
+
+## AWS Infrastructure with Terraform
+
+Terraform is used to provision the AWS infrastructure required to run the application on Amazon EKS.
+
+### Infrastructure Provisioned
+
+The Terraform configuration creates:
+
+- Custom VPC
+- Two public subnets across two Availability Zones
+- Two private subnets across two Availability Zones
+- Internet Gateway
+- NAT Gateway
+- Public and private route tables
+- IAM roles for the EKS cluster and worker nodes
+- Amazon ECR repository
+- Amazon EKS cluster
+- EKS managed node group
+
+The EKS worker nodes run in private subnets while the public subnets provide the networking required for internet-facing resources such as the Application Load Balancer.
+
+### EKS Node Configuration
+
+The managed node group is configured with:
+
+- Instance type: `t3.small`
+- Minimum nodes: `1`
+- Desired nodes: `1`
+- Maximum nodes: `4`
+
+The initial environment therefore starts with one worker node and can later scale up to four nodes.
+
+### Terraform Directory
+
+Terraform configuration files are located in:
+
+```text
+terraform/
+├── providers.tf
+├── variables.tf
+├── terraform.tfvars
+├── networking.tf
+├── iam.tf
+├── ecr.tf
+├── eks.tf
+└── outputs.tf
+```
+
+### Deploying the Infrastructure
+
+Navigate to the Terraform directory:
+
+```bash
+cd terraform
+```
+
+Initialize Terraform:
+
+```bash
+terraform init
+```
+
+Format and validate the configuration:
+
+```bash
+terraform fmt
+terraform validate
+```
+
+Preview the infrastructure changes:
+
+```bash
+terraform plan
+```
+
+Deploy the infrastructure:
+
+```bash
+terraform apply
+```
+
+Review the Terraform plan and enter `yes` when prompted to approve the deployment.
+
+### Terraform Outputs
+
+After deployment, important infrastructure information can be displayed with:
+
+```bash
+terraform output
+```
+
+Outputs include:
+
+- AWS region
+- VPC ID
+- Public subnet IDs
+- Private subnet IDs
+- EKS cluster name
+- EKS API endpoint
+- EKS managed node group name
+- ECR repository URL
+
+For example, the ECR repository URL can be retrieved with:
+
+```bash
+terraform output -raw ecr_repository_url
+```
+
+### Configure kubectl for EKS
+
+After the EKS cluster has been created, configure the local Kubernetes client:
+
+```bash
+aws eks update-kubeconfig --region us-east-2 --name tech-challenge-2-eks
+```
+
+Verify the connection:
+
+```bash
+kubectl cluster-info
+```
+
+Verify the worker nodes:
+
+```bash
+kubectl get nodes
+```
+
+The initial deployment should show one `t3.small` worker node in the `Ready` state.
+
+Core EKS system workloads can be verified with:
+
+```bash
+kubectl get pods -n kube-system
+```
