@@ -598,3 +598,39 @@ At the completion of this phase:
 - The application successfully returns `Hello, World!` through the Kubernetes Service.
 - Kubernetes self-healing successfully replaces a deleted application pod.
 - Public ALB access, Helm deployment, and autoscaling will be configured in later phases.
+
+## Helm and Application Load Balancer
+
+The Kubernetes application was packaged and deployed using Helm to provide reusable and configurable Kubernetes manifests. The Helm chart manages the application Deployment, ClusterIP Service, resource requests and limits, health probes, and Ingress configuration.
+
+The AWS Load Balancer Controller was installed in the EKS cluster using Helm. OIDC and IAM resources were configured with Terraform to provide the controller with the AWS permissions required to manage load balancing resources.
+
+A Kubernetes Ingress was configured with the `alb` IngressClass. The AWS Load Balancer Controller detected the Ingress and dynamically provisioned an internet-facing AWS Application Load Balancer.
+
+Application traffic follows the path:
+
+Internet → Application Load Balancer → Kubernetes Ingress → ClusterIP Service → Flask Pod
+
+The ALB listens for HTTP traffic on port 80 and routes requests through the Kubernetes Service to the Flask application running on port 5000.
+
+The deployment was validated by confirming the ALB was active and accessing the application through the public ALB DNS endpoint, which successfully returned:
+
+`Hello, World!`
+
+### AWS Load Balancer Controller
+
+The controller uses a dedicated IAM role and Kubernetes ServiceAccount through IAM Roles for Service Accounts (IRSA). An EKS OIDC provider allows AWS to verify the controller's Kubernetes identity before granting the required AWS permissions.
+
+During deployment, the controller initially entered a `CrashLoopBackOff` state because it could not automatically discover the VPC ID through EC2 instance metadata. The issue was identified using Kubernetes logs and resolved by retrieving the VPC ID from Terraform and explicitly providing it to the AWS Load Balancer Controller Helm release.
+
+### Validation
+
+The following were verified:
+
+- Helm application release successfully deployed
+- AWS Load Balancer Controller running successfully
+- Kubernetes Ingress configured with the `alb` IngressClass
+- Internet-facing Application Load Balancer successfully provisioned
+- ALB registered with an AWS DNS endpoint
+- Public traffic successfully routed to the Flask application
+- Application returned `Hello, World!` through the ALB
