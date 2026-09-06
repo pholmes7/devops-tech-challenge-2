@@ -54,3 +54,62 @@ Open a browser and navigate to:
 The application should display:
 
 **Hello, World!**
+## Docker Setup
+
+The Flask application is containerized using Docker. The Dockerfile and application dependencies are located in the `app` directory.
+
+### Build the Docker Image
+
+From the project root, run:
+
+```bash
+docker build -t tech-challenge-2-app ./app
+```
+
+This builds the Docker image using the Dockerfile located in the `app` directory.
+
+### Run the Docker Container
+
+Run the container and map port 5000 on the local machine to port 5000 inside the container:
+
+```bash
+docker run -d --name tech-challenge-2-container -p 5000:5000 tech-challenge-2-app
+```
+
+### Access the Application
+
+Open a browser and navigate to:
+
+`http://localhost:5000`
+
+The application should display:
+
+**Hello, World!**
+
+### Verify the Container
+
+To verify that the container is running:
+
+```bash
+docker ps
+```
+
+To view the application logs:
+
+```bash
+docker logs tech-challenge-2-container
+```
+
+### Stop and Restart the Container
+
+Stop the container:
+
+```bash
+docker stop tech-challenge-2-container
+```
+
+Restart the existing container:
+
+```bash
+docker start tech-challenge-2-container
+```
