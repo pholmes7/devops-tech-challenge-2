@@ -2,720 +2,401 @@
 
 ## Project Overview
 
-This project demonstrates the deployment of a containerized web application to Amazon EKS using Kubernetes, Terraform, Docker, Helm, and Jenkins.
+This project demonstrates an end-to-end DevOps deployment of a containerized Python Flask application to Amazon EKS.
 
-The application is a simple Python Flask web application that displays:
+The environment uses Terraform for Infrastructure as Code, Docker and Amazon ECR for containerization and image storage, Kubernetes and Helm for application deployment, an AWS Application Load Balancer for public access, HPA and Cluster Autoscaler for scaling, and Jenkins for CI/CD automation.
 
-**Hello, World!**
+The deployed application displays:
 
-The project will demonstrate Infrastructure as Code, container orchestration, application and infrastructure auto scaling, load testing, and automated CI/CD deployment.
+**Hello, World! CI/CD Deployment Successful!**
 
-## Technologies
+---
 
-- Python
-- Flask
+## Architecture
+
+![Architecture Diagram](images/architecture-diagram.png)
+
+```text
+GitHub
+   ↓
+Jenkins Pipeline
+   ↓
+Docker Build
+   ↓
+Amazon ECR
+   ↓
+Amazon EKS
+   ↓
+Helm / Kubernetes
+   ↓
+Application Load Balancer
+   ↓
+Flask Application
+```
+
+The application also uses two levels of autoscaling:
+
+- **Horizontal Pod Autoscaler (HPA)** scales application pods based on CPU or memory utilization.
+- **Cluster Autoscaler** scales the EKS worker node group based on workload demand.
+
+---
+
+## Technologies Used
+
+- Python / Flask
 - Docker
+- GitHub
+- Jenkins
+- Terraform
 - Amazon ECR
 - Amazon EKS
 - Kubernetes
-- Terraform
 - Helm
-- Jenkins
 - AWS Application Load Balancer
+- Metrics Server
+- Horizontal Pod Autoscaler
+- Cluster Autoscaler
 - Siege
 
-## Local Application Setup
+---
 
-### Requirements
+## Application
 
-- Python 3
-- pip
+The project uses a simple Python Flask application located in the `app` directory.
 
-### Install Dependencies
+### Run Locally
 
-From the project root:
+Install the application dependencies:
 
 ```bash
 pip install -r app/requirements.txt
 ```
 
-### Run the Application
-
-From the project root:
+Start the application:
 
 ```bash
 python app/app.py
 ```
 
-Open a browser and navigate to:
+Access the application at:
 
-`http://localhost:5000`
+```text
+http://localhost:5000
+```
 
-The application should display:
+---
 
-**Hello, World!**
-## Docker Setup
+## Docker
 
-The Flask application is containerized using Docker. The Dockerfile and application dependencies are located in the `app` directory.
+The Flask application is containerized using Docker.
 
-### Build the Docker Image
-
-From the project root, run:
+Build the Docker image:
 
 ```bash
 docker build -t tech-challenge-2-app ./app
 ```
 
-This builds the Docker image using the Dockerfile located in the `app` directory.
-
-### Run the Docker Container
-
-Run the container and map port 5000 on the local machine to port 5000 inside the container:
+Run the container locally:
 
 ```bash
 docker run -d --name tech-challenge-2-container -p 5000:5000 tech-challenge-2-app
 ```
 
-### Access the Application
+The production Docker images are stored in Amazon ECR and deployed to Amazon EKS.
 
-Open a browser and navigate to:
-
-`http://localhost:5000`
-
-The application should display:
-
-**Hello, World!**
-
-### Verify the Container
-
-To verify that the container is running:
-
-```bash
-docker ps
-```
-
-To view the application logs:
-
-```bash
-docker logs tech-challenge-2-container
-```
-
-### Stop and Restart the Container
-
-Stop the container:
-
-```bash
-docker stop tech-challenge-2-container
-```
-
-Restart the existing container:
-
-```bash
-docker start tech-challenge-2-container
-```
 ---
 
-## AWS Infrastructure with Terraform
+## Infrastructure as Code
 
-Terraform is used to provision the AWS infrastructure required to run the application on Amazon EKS.
+Terraform provisions the AWS infrastructure required for the application.
 
 ### Infrastructure Provisioned
 
-The Terraform configuration creates:
-
 - Custom VPC
-- Two public subnets across two Availability Zones
-- Two private subnets across two Availability Zones
+- Two public subnets
+- Two private subnets
 - Internet Gateway
 - NAT Gateway
 - Public and private route tables
-- IAM roles for the EKS cluster and worker nodes
 - Amazon ECR repository
 - Amazon EKS cluster
 - EKS managed node group
+- IAM roles and policies
+- Jenkins EC2 server
+- IAM/IRSA resources for Kubernetes controllers
 
-The EKS worker nodes run in private subnets while the public subnets provide the networking required for internet-facing resources such as the Application Load Balancer.
+The EKS worker nodes run in private subnets while public subnets support internet-facing resources such as the Application Load Balancer.
 
 ### EKS Node Configuration
-
-The managed node group is configured with:
 
 - Instance type: `t3.small`
 - Minimum nodes: `1`
 - Desired nodes: `1`
 - Maximum nodes: `4`
 
-The initial environment therefore starts with one worker node and can later scale up to four nodes.
-
-### Terraform Directory
-
-Terraform configuration files are located in:
-
-```text
-terraform/
-├── providers.tf
-├── variables.tf
-├── terraform.tfvars
-├── networking.tf
-├── iam.tf
-├── ecr.tf
-├── eks.tf
-└── outputs.tf
-```
-
-### Deploying the Infrastructure
-
-Navigate to the Terraform directory:
+### Deploy Infrastructure
 
 ```bash
 cd terraform
-```
-
-Initialize Terraform:
-
-```bash
 terraform init
-```
-
-Format and validate the configuration:
-
-```bash
 terraform fmt
 terraform validate
-```
-
-Preview the infrastructure changes:
-
-```bash
 terraform plan
-```
-
-Deploy the infrastructure:
-
-```bash
 terraform apply
 ```
 
-Review the Terraform plan and enter `yes` when prompted to approve the deployment.
-
-### Terraform Outputs
-
-After deployment, important infrastructure information can be displayed with:
-
-```bash
-terraform output
-```
-
-Outputs include:
-
-- AWS region
-- VPC ID
-- Public subnet IDs
-- Private subnet IDs
-- EKS cluster name
-- EKS API endpoint
-- EKS managed node group name
-- ECR repository URL
-
-For example, the ECR repository URL can be retrieved with:
-
-```bash
-terraform output -raw ecr_repository_url
-```
-
-### Configure kubectl for EKS
-
-After the EKS cluster has been created, configure the local Kubernetes client:
+Configure kubectl after the EKS cluster is created:
 
 ```bash
 aws eks update-kubeconfig --region us-east-2 --name tech-challenge-2-eks
 ```
 
-Verify the connection:
-
-```bash
-kubectl cluster-info
-```
-
-Verify the worker nodes:
+Verify the cluster:
 
 ```bash
 kubectl get nodes
 ```
 
-The initial deployment should show one `t3.small` worker node in the `Ready` state.
+---
 
-Core EKS system workloads can be verified with:
+## Kubernetes and Helm
 
-```bash
-kubectl get pods -n kube-system
-```
+The application is deployed to Amazon EKS using Kubernetes and packaged using Helm.
 
-## Kubernetes Application Deployment
+The deployment includes:
 
-The containerized Flask application is deployed to Amazon EKS using Kubernetes. The Docker image is stored in Amazon Elastic Container Registry (ECR), allowing the EKS worker nodes to securely pull and run the application.
+- Kubernetes Deployment
+- ClusterIP Service
+- Readiness and liveness probes
+- CPU and memory resource requests and limits
+- Horizontal Pod Autoscaler
+- Topology spread constraints
+- Kubernetes Ingress
 
-The initial Kubernetes deployment runs one application pod on the EKS managed node group. Kubernetes manages the application's desired state and automatically replaces the pod if it fails or is deleted.
-
-### Kubernetes Architecture
-
-The application currently follows this deployment flow:
-
-```text
-Local Flask Application
-        ↓
-Docker Image
-        ↓
-Amazon ECR
-        ↓
-Amazon EKS
-        ↓
-EKS Worker Node
-        ↓
-Kubernetes Deployment
-        ↓
-Flask Pod
-        ↓
-Kubernetes ClusterIP Service
-```
-
-Public access through an Application Load Balancer (ALB) will be configured in a later phase.
-
-### Kubernetes Resources
-
-The Kubernetes configuration is stored in:
+Application traffic follows:
 
 ```text
-kubernetes/
-├── deployment.yaml
-└── service.yaml
+Internet
+   ↓
+AWS Application Load Balancer
+   ↓
+Kubernetes Ingress
+   ↓
+ClusterIP Service :80
+   ↓
+Flask Pods :5000
 ```
 
-The resources include:
+The AWS Load Balancer Controller monitors the Kubernetes Ingress and dynamically provisions the internet-facing Application Load Balancer.
 
-- `deployment.yaml` - Defines and manages the Flask application pod.
-- `service.yaml` - Creates a stable internal endpoint and routes traffic to the application pod.
+Helm provides reusable Kubernetes templates and is also used by the Jenkins pipeline to deploy updated application versions.
 
-### Application Deployment Configuration
+---
 
-The Kubernetes Deployment initially runs one replica of the Flask application.
+## Kubernetes Self-Healing
 
-The container uses the Docker image stored in Amazon ECR and listens on port `5000`.
+Kubernetes self-healing was validated by manually deleting a running application pod.
 
-Resource requests and limits are configured for the container:
-
-```yaml
-resources:
-  requests:
-    cpu: "25m"
-    memory: "64Mi"
-  limits:
-    cpu: "250m"
-    memory: "256Mi"
-```
-
-The CPU and memory requests establish the resource baseline for the pod and will later be used by the Horizontal Pod Autoscaler (HPA) when calculating CPU and memory utilization.
-
-The Deployment also includes Kubernetes readiness and liveness probes against the application's `/` endpoint.
-
-The readiness probe verifies that the application is ready to receive traffic, while the liveness probe allows Kubernetes to detect and restart an unhealthy container.
-
-### Kubernetes Service
-
-The application uses a `ClusterIP` Service:
-
-```yaml
-type: ClusterIP
-```
-
-The Service listens on port `80` and forwards traffic to the Flask application on port `5000`:
+Because the Deployment maintains a desired replica count, Kubernetes automatically detected the missing pod and created a replacement.
 
 ```text
-Kubernetes Service :80
-        ↓
-Flask Pod :5000
-```
-
-The Service uses the application label to automatically locate the appropriate application pods:
-
-```yaml
-selector:
-  app: tech-challenge-2-app
-```
-
-This provides a stable endpoint even when application pods are created, deleted, or replaced.
-
-### Authenticate Docker to Amazon ECR
-
-Before pushing an image, authenticate Docker with the Amazon ECR registry.
-
-The standard AWS ECR authentication command is:
-
-```bash
-aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin <aws-account-id>.dkr.ecr.us-east-2.amazonaws.com
-```
-
-> **Windows PowerShell Note:** During development, PowerShell produced an HTTP 400 error when piping the ECR authentication token directly to Docker. Running the pipeline through `cmd.exe` resolved the issue:
-
-```powershell
-cmd.exe /c "aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin <aws-account-id>.dkr.ecr.us-east-2.amazonaws.com"
-```
-
-### Build and Push the Docker Image to ECR
-
-Retrieve the ECR repository URL from Terraform:
-
-```powershell
-$ECR_REPO = terraform -chdir=terraform output -raw ecr_repository_url
-```
-
-Build the application image if needed:
-
-```powershell
-docker build -t tech-challenge-2-app ./app
-```
-
-Tag the local Docker image with the ECR repository:
-
-```powershell
-docker tag tech-challenge-2-app:latest ${ECR_REPO}:latest
-```
-
-Push the image to Amazon ECR:
-
-```powershell
-docker push ${ECR_REPO}:latest
-```
-
-Verify that the image exists in ECR:
-
-```powershell
-aws ecr describe-images --repository-name devops-tech-challenge-2-app --region us-east-2
-```
-
-### Configure kubectl for EKS
-
-Configure the local Kubernetes configuration to communicate with the EKS cluster:
-
-```powershell
-aws eks update-kubeconfig --region us-east-2 --name tech-challenge-2-eks
-```
-
-Verify the active Kubernetes context:
-
-```powershell
-kubectl config current-context
-```
-
-Verify connectivity to the cluster:
-
-```powershell
-kubectl cluster-info
-```
-
-Verify that the EKS worker node is available:
-
-```powershell
-kubectl get nodes
-```
-
-The worker node should report a status of:
-
-```text
-Ready
-```
-
-### Validate the Kubernetes Configuration
-
-Before deploying, the Kubernetes YAML files can be validated using a client-side dry run:
-
-```powershell
-kubectl apply --dry-run=client -f kubernetes\
-```
-
-The dry run validates the configuration without creating resources in the EKS cluster.
-
-### Deploy the Application to EKS
-
-Deploy the Kubernetes resources:
-
-```powershell
-kubectl apply -f kubernetes\
-```
-
-Verify the Deployment:
-
-```powershell
-kubectl get deployments
-```
-
-Verify the application pod:
-
-```powershell
-kubectl get pods
-```
-
-Verify the Service:
-
-```powershell
-kubectl get services
-```
-
-Verify that the Service has discovered the application pod:
-
-```powershell
-kubectl get endpoints tech-challenge-2-service
-```
-
-The initial application state should contain:
-
-```text
-EKS Worker Nodes:     1
-Application Replicas: 1
-Application Pods:     1
-```
-
-The application pod should report:
-
-```text
-READY:   1/1
-STATUS:  Running
-```
-
-### Inspect the Application
-
-View detailed information about the application pod:
-
-```powershell
-kubectl describe pod <pod-name>
-```
-
-View application logs:
-
-```powershell
-kubectl logs -l app=tech-challenge-2-app
-```
-
-The Flask application should report that it is listening on port `5000`.
-
-### Test the Application
-
-Because the application currently uses an internal `ClusterIP` Service, it can be tested locally using Kubernetes port forwarding.
-
-Run:
-
-```powershell
-kubectl port-forward service/tech-challenge-2-service 8080:80
-```
-
-Then access:
-
-```text
-http://localhost:8080
-```
-
-The application should display:
-
-```text
-Hello, World!
-```
-
-The application can also be tested from another terminal:
-
-```powershell
-curl.exe http://localhost:8080
-```
-
-Expected response:
-
-```text
-Hello, World!
-```
-
-Stop the temporary port-forward with `Ctrl + C`.
-
-### Kubernetes Self-Healing Test
-
-Kubernetes self-healing was validated by manually deleting the running application pod.
-
-First, identify the pod:
-
-```powershell
-kubectl get pods
-```
-
-Monitor the application pods:
-
-```powershell
-kubectl get pods -w
-```
-
-In another terminal, delete the running pod:
-
-```powershell
-kubectl delete pod <pod-name>
-```
-
-Because the Deployment specifies a desired state of one replica, Kubernetes automatically creates a replacement pod.
-
-The expected behavior is:
-
-```text
-1 Running Pod
-      ↓
+Running Pod
+    ↓
 Pod Deleted
-      ↓
-0 Running Pods
-      ↓
-Kubernetes Detects Desired-State Mismatch
-      ↓
+    ↓
+Desired-State Mismatch Detected
+    ↓
 Replacement Pod Created
-      ↓
-1 Running Pod
+    ↓
+Application Restored
 ```
 
-Verify that the replacement pod reaches:
+This demonstrated Kubernetes' ability to maintain the desired application state without manual intervention.
 
-```text
-READY:   1/1
-STATUS:  Running
-```
-
-This validates Kubernetes' ability to maintain the application's desired state without manual intervention.
-
-### Current Kubernetes Status
-
-At the completion of this phase:
-
-- The Flask application is containerized with Docker.
-- The Docker image is stored in Amazon ECR.
-- Amazon EKS is running with one `t3.small` worker node.
-- The EKS managed node group can scale from 1 to 4 nodes.
-- The application Deployment starts with one replica.
-- CPU and memory resource requests and limits are configured.
-- Readiness and liveness probes monitor application health.
-- A ClusterIP Service routes traffic to the application pod.
-- The application successfully returns `Hello, World!` through the Kubernetes Service.
-- Kubernetes self-healing successfully replaces a deleted application pod.
-- Public ALB access, Helm deployment, and autoscaling will be configured in later phases.
-
-## Helm and Application Load Balancer
-
-The Kubernetes application was packaged and deployed using Helm to provide reusable and configurable Kubernetes manifests. The Helm chart manages the application Deployment, ClusterIP Service, resource requests and limits, health probes, and Ingress configuration.
-
-The AWS Load Balancer Controller was installed in the EKS cluster using Helm. OIDC and IAM resources were configured with Terraform to provide the controller with the AWS permissions required to manage load balancing resources.
-
-A Kubernetes Ingress was configured with the `alb` IngressClass. The AWS Load Balancer Controller detected the Ingress and dynamically provisioned an internet-facing AWS Application Load Balancer.
-
-Application traffic follows the path:
-
-Internet → Application Load Balancer → Kubernetes Ingress → ClusterIP Service → Flask Pod
-
-The ALB listens for HTTP traffic on port 80 and routes requests through the Kubernetes Service to the Flask application running on port 5000.
-
-The deployment was validated by confirming the ALB was active and accessing the application through the public ALB DNS endpoint, which successfully returned:
-
-`Hello, World!`
-
-### AWS Load Balancer Controller
-
-The controller uses a dedicated IAM role and Kubernetes ServiceAccount through IAM Roles for Service Accounts (IRSA). An EKS OIDC provider allows AWS to verify the controller's Kubernetes identity before granting the required AWS permissions.
-
-During deployment, the controller initially entered a `CrashLoopBackOff` state because it could not automatically discover the VPC ID through EC2 instance metadata. The issue was identified using Kubernetes logs and resolved by retrieving the VPC ID from Terraform and explicitly providing it to the AWS Load Balancer Controller Helm release.
-
-### Validation
-
-The following were verified:
-
-- Helm application release successfully deployed
-- AWS Load Balancer Controller running successfully
-- Kubernetes Ingress configured with the `alb` IngressClass
-- Internet-facing Application Load Balancer successfully provisioned
-- ALB registered with an AWS DNS endpoint
-- Public traffic successfully routed to the Flask application
-- Application returned `Hello, World!` through the ALB
+---
 
 ## Autoscaling
 
-The EKS environment is configured for both pod-level and node-level autoscaling.
+The EKS environment supports both application-level and infrastructure-level autoscaling.
 
 ### Horizontal Pod Autoscaler
 
-Metrics Server was installed to provide CPU and memory utilization metrics to Kubernetes. The application HPA is configured to:
+Metrics Server provides CPU and memory utilization metrics to Kubernetes.
 
-- Maintain a minimum of 1 application pod
-- Scale up to 12 application pods
-- Scale when CPU utilization reaches 50%
-- Scale when memory utilization reaches 50%
+The application HPA is configured with:
 
-Topology spread constraints were also added to distribute application replicas across available worker nodes.
+- Minimum pods: `1`
+- Maximum pods: `12`
+- CPU target: `50%`
+- Memory target: `50%`
+
+Topology spread constraints help distribute application replicas across available worker nodes.
 
 ### Cluster Autoscaler
 
-Cluster Autoscaler was installed using Helm and configured to manage the EKS managed node group.
+Cluster Autoscaler manages the EKS managed node group.
 
-The node group uses `t3.small` instances and is configured with:
+The node group can scale between:
 
-- Minimum nodes: 1
-- Desired nodes: 1
-- Maximum nodes: 4
+```text
+1 → 4 worker nodes
+```
 
-A dedicated IAM role and IRSA configuration allow Cluster Autoscaler to securely manage the AWS Auto Scaling Group. Cluster Autoscaler successfully discovered the EKS node group and is running in the `kube-system` namespace.
+A dedicated IAM role using IAM Roles for Service Accounts (IRSA) provides Cluster Autoscaler with the AWS permissions required to manage the underlying Auto Scaling Group.
 
-### Validation
+---
 
-The autoscaling environment was validated before load testing:
+## Load Testing
 
-- Metrics Server successfully reports CPU and memory usage
-- HPA is active with CPU and memory targets of 50%
-- Cluster Autoscaler is running successfully
-- EKS currently maintains 1 worker node
-- Application currently maintains 1 replica
+Siege was used to generate traffic against the application through the public AWS Application Load Balancer.
 
-Actual pod and node scaling behavior will be validated using Siege load testing.
-
-## Load Testing and Autoscaling Validation
-
-Siege was used to generate load against the application through the public AWS Application Load Balancer.
-
-### Load Test
-
-The test was executed with 25 concurrent users for 2 minutes.
+The test used 25 concurrent users for 2 minutes:
 
 ```bash
 siege -c 25 -t 2M http://<ALB-DNS-NAME>
+```
 
-## Jenkins Server Setup
+During the test:
 
-A Jenkins server was provisioned on an AWS EC2 instance using Terraform to support CI/CD automation.
+- HPA scaled the application from `1` to `12` pods.
+- Cluster Autoscaler scaled the EKS environment from `1` to `4` worker nodes.
+- At peak load, 12 application pods were distributed across 4 worker nodes.
+- Kubernetes began scaling the environment down after the load test ended.
 
-### Jenkins Configuration
+This validated both pod-level and infrastructure-level autoscaling.
 
-- Provisioned a `t3.medium` EC2 instance for Jenkins.
-- Installed Jenkins and Java.
-- Installed and configured Git, Docker, AWS CLI, kubectl, and Helm.
-- Configured the Jenkins user to run Docker commands.
-- Created an EC2 IAM role and instance profile for secure AWS authentication without storing AWS access keys.
-- Granted Jenkins access to Amazon ECR for container image operations.
-- Configured EKS Access Entries to allow Jenkins to manage the Kubernetes cluster.
-- Configured a GitHub Personal Access Token for access to the private repository.
-- Verified Jenkins could successfully clone the private GitHub repository.
-- Verified Jenkins could communicate with AWS, ECR, and EKS.
+---
 
-This configuration provides the foundation for the Jenkins CI/CD pipeline that will build the Docker image, push it to Amazon ECR, and deploy the application to Amazon EKS using Helm.
+## Jenkins Server
+
+A Jenkins server was provisioned on an AWS EC2 `t3.medium` instance using Terraform.
+
+The Jenkins server includes:
+
+- Jenkins
+- Java
+- Git
+- Docker
+- AWS CLI
+- kubectl
+- Helm
+
+The Jenkins user was configured with Docker access and the tools required to manage the deployment.
+
+### AWS Authentication
+
+An EC2 IAM role and instance profile allow Jenkins to interact with AWS without storing long-lived AWS access keys on the server.
+
+Jenkins was granted the required access to:
+
+- Amazon ECR
+- Amazon EKS
+- Kubernetes
+
+EKS Access Entries allow the Jenkins IAM role to authenticate with the Kubernetes cluster.
+
+A GitHub Personal Access Token stored in Jenkins Credentials provides access to the private GitHub repository.
+
+---
 
 ## Jenkins CI/CD Pipeline
 
-Jenkins automates the application's build and deployment process using a pipeline defined in the `Jenkinsfile`.
+The CI/CD workflow is defined in the root `Jenkinsfile`.
 
-The pipeline:
+The pipeline automates:
 
-- Checks out the application from the private GitHub repository.
-- Builds the Docker image.
-- Authenticates with Amazon ECR.
-- Tags and pushes the image to ECR.
-- Connects to the Amazon EKS cluster.
-- Deploys the new application version using Helm.
-- Uses kubectl to verify the Kubernetes deployment.
+```text
+GitHub Checkout
+      ↓
+Docker Build
+      ↓
+ECR Authentication
+      ↓
+Docker Image Tag
+      ↓
+ECR Push
+      ↓
+EKS Configuration
+      ↓
+Helm Deployment
+      ↓
+kubectl Rollout Verification
+```
 
-Each Jenkins build uses a unique image tag based on the Jenkins build number, ensuring Kubernetes deploys the newly built application version.
+Each Jenkins build uses the Jenkins build number as a unique Docker image tag. This ensures each pipeline execution deploys a distinct application version rather than relying solely on the `latest` tag.
+
+### CI/CD Validation
+
+The complete pipeline was validated by making a visible change to the Flask application and pushing the updated source code to GitHub.
+
+Jenkins successfully:
+
+1. Checked out the updated source code from the private GitHub repository.
+2. Built a new Docker image.
+3. Tagged the image with the Jenkins build number.
+4. Authenticated with Amazon ECR.
+5. Pushed the new image to ECR.
+6. Connected to the EKS cluster.
+7. Updated the application using Helm.
+8. Verified the Kubernetes rollout using kubectl.
+
+The updated application was then accessed through the Application Load Balancer and returned:
+
+**Hello, World! CI/CD Deployment Successful!**
+
+---
+
+## Key Validation Results
+
+The completed project successfully demonstrated:
+
+- Docker containerization
+- Infrastructure provisioning with Terraform
+- Amazon EKS deployment
+- Kubernetes self-healing
+- Helm-based application management
+- Public Application Load Balancer routing
+- CPU and memory-based HPA scaling
+- EKS worker node autoscaling
+- Siege load testing
+- Jenkins access to a private GitHub repository
+- Secure Jenkins AWS authentication using an EC2 IAM role
+- Automated Docker builds
+- Automated ECR image pushes
+- Automated Helm deployments
+- Kubernetes rollout verification
+- Successful end-to-end CI/CD deployment
+
+---
+
+## Repository Structure
+
+```text
+devops-tech-challenge-2/
+├── app/
+│   ├── app.py
+│   ├── requirements.txt
+│   ├── Dockerfile
+│   └── .dockerignore
+├── helm/
+│   └── tech-challenge-2/
+├── images/
+│   └── architecture-diagram.png
+├── kubernetes/
+│   ├── deployment.yaml
+│   └── service.yaml
+├── terraform/
+├── Jenkinsfile
+├── .gitignore
+└── README.md
+```
+
+---
+
+## Project Outcome
+
+The project demonstrates a complete DevOps workflow in which AWS infrastructure is provisioned through Terraform, applications are containerized with Docker, workloads are orchestrated and automatically scaled through Kubernetes on Amazon EKS, and application updates are deployed through a Jenkins CI/CD pipeline.
+
+The final environment successfully demonstrated:
+
+**Code → Build → Container Registry → Kubernetes → Autoscaling → CI/CD → Production Deployment**
