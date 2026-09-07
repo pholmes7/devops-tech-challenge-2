@@ -634,3 +634,42 @@ The following were verified:
 - ALB registered with an AWS DNS endpoint
 - Public traffic successfully routed to the Flask application
 - Application returned `Hello, World!` through the ALB
+
+## Autoscaling
+
+The EKS environment is configured for both pod-level and node-level autoscaling.
+
+### Horizontal Pod Autoscaler
+
+Metrics Server was installed to provide CPU and memory utilization metrics to Kubernetes. The application HPA is configured to:
+
+- Maintain a minimum of 1 application pod
+- Scale up to 12 application pods
+- Scale when CPU utilization reaches 50%
+- Scale when memory utilization reaches 50%
+
+Topology spread constraints were also added to distribute application replicas across available worker nodes.
+
+### Cluster Autoscaler
+
+Cluster Autoscaler was installed using Helm and configured to manage the EKS managed node group.
+
+The node group uses `t3.small` instances and is configured with:
+
+- Minimum nodes: 1
+- Desired nodes: 1
+- Maximum nodes: 4
+
+A dedicated IAM role and IRSA configuration allow Cluster Autoscaler to securely manage the AWS Auto Scaling Group. Cluster Autoscaler successfully discovered the EKS node group and is running in the `kube-system` namespace.
+
+### Validation
+
+The autoscaling environment was validated before load testing:
+
+- Metrics Server successfully reports CPU and memory usage
+- HPA is active with CPU and memory targets of 50%
+- Cluster Autoscaler is running successfully
+- EKS currently maintains 1 worker node
+- Application currently maintains 1 replica
+
+Actual pod and node scaling behavior will be validated using Siege load testing.
