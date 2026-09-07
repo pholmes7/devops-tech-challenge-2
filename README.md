@@ -703,3 +703,19 @@ A Jenkins server was provisioned on an AWS EC2 instance using Terraform to suppo
 - Verified Jenkins could communicate with AWS, ECR, and EKS.
 
 This configuration provides the foundation for the Jenkins CI/CD pipeline that will build the Docker image, push it to Amazon ECR, and deploy the application to Amazon EKS using Helm.
+
+## Jenkins CI/CD Pipeline
+
+Jenkins automates the application's build and deployment process using a pipeline defined in the `Jenkinsfile`.
+
+The pipeline:
+
+- Checks out the application from the private GitHub repository.
+- Builds the Docker image.
+- Authenticates with Amazon ECR.
+- Tags and pushes the image to ECR.
+- Connects to the Amazon EKS cluster.
+- Deploys the new application version using Helm.
+- Uses kubectl to verify the Kubernetes deployment.
+
+Each Jenkins build uses a unique image tag based on the Jenkins build number, ensuring Kubernetes deploys the newly built application version.
