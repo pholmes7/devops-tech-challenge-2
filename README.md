@@ -684,3 +684,22 @@ The test was executed with 25 concurrent users for 2 minutes.
 
 ```bash
 siege -c 25 -t 2M http://<ALB-DNS-NAME>
+
+## Jenkins Server Setup
+
+A Jenkins server was provisioned on an AWS EC2 instance using Terraform to support CI/CD automation.
+
+### Jenkins Configuration
+
+- Provisioned a `t3.medium` EC2 instance for Jenkins.
+- Installed Jenkins and Java.
+- Installed and configured Git, Docker, AWS CLI, kubectl, and Helm.
+- Configured the Jenkins user to run Docker commands.
+- Created an EC2 IAM role and instance profile for secure AWS authentication without storing AWS access keys.
+- Granted Jenkins access to Amazon ECR for container image operations.
+- Configured EKS Access Entries to allow Jenkins to manage the Kubernetes cluster.
+- Configured a GitHub Personal Access Token for access to the private repository.
+- Verified Jenkins could successfully clone the private GitHub repository.
+- Verified Jenkins could communicate with AWS, ECR, and EKS.
+
+This configuration provides the foundation for the Jenkins CI/CD pipeline that will build the Docker image, push it to Amazon ECR, and deploy the application to Amazon EKS using Helm.
