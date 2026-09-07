@@ -673,3 +673,14 @@ The autoscaling environment was validated before load testing:
 - Application currently maintains 1 replica
 
 Actual pod and node scaling behavior will be validated using Siege load testing.
+
+## Load Testing and Autoscaling Validation
+
+Siege was used to generate load against the application through the public AWS Application Load Balancer.
+
+### Load Test
+
+The test was executed with 25 concurrent users for 2 minutes.
+
+```bash
+siege -c 25 -t 2M http://<ALB-DNS-NAME>
